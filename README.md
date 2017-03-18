@@ -52,7 +52,7 @@ Under this interpretation, `join :: t (t v) -> t v` can be considered as a "subs
 # Unification for Free!
 
 So it is left to derive unification.
-To that end, we use GHCs [Generic Deriving Mechanism](https:**downloads.haskell.org*~ghc*latest*docs*html*users_guide*glasgow_exts.html#generic-programming Generic Deriving mechanism).
+To that end, we use GHCs [Generic Deriving Mechanism](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/glasgow_exts.html#generic-programming).
 
 What we need to get unification for free is just add *three* classes to deriving clause:
 `Generic1`, `HasVar` and `Unifiable`.
