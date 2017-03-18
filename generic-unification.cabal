@@ -1,0 +1,53 @@
+name:                generic-unification
+version:             0.1.0.0
+synopsis:            Unification for free!
+description:
+  This package provides automatic deriving mechanism for unification algorithm.
+  .
+  See <Data-Unification-Generic.html Module documentation> for more information.
+                     
+homepage:            https://github.com/konn/generic-unification#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Hiromi ISHII
+maintainer:          konn.jinro _at_ gmail.com
+copyright:           2015 (c) Hiromi ISHII
+category:            Web
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Data.Unification.Generic
+  build-depends:       base >= 4.7 && < 5
+                     , containers
+                     , mtl
+                     , union-find
+                     , transformers
+                     , free
+  ghc-options:         -Wall
+  default-language:    Haskell2010
+  default-extensions:  DeriveGeneric
+                       GADTs
+                       TypeFamilies
+                       MultiParamTypeClasses
+                       DeriveAnyClass
+                       DeriveFunctor
+                       GeneralizedNewtypeDeriving
+                       TypeOperators
+                       DefaultSignatures
+                       FlexibleContexts
+
+test-suite generic-unification-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       base
+                     , generic-unification
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/konn/generic-unification
