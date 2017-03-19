@@ -13,52 +13,52 @@ main main25,26
 ./Setup.hs,15
 main main1,2
 
-./src/Data/Unification/Generic.hs,1423
+./src/Data/Unification/Generic.hs,1422
 module Data.Unification.GenericData.Unification.Generic4,5
-data UnificationStatus UnificationStatus23,24
-  Success Success24,25
-  Success (f a) (Map a (f a))  | Failed Failed24,25
-data UnificationError UnificationError27,28
-data UnificationError f a = OccursCheck OccursCheck27,28
-type Term Term29,30
-newtype Var Var31,32
-  Var Var32,33
-  Var { runVar runVar32,33
-class Traversable f => HasVar HasVar39,40
-  default takeVar :: (Generic1 f, GHasVar (Rep1 f)) => f f44,45
+data UnificationStatus UnificationStatus21,22
+  Success Success22,23
+  Success (f a) (Map a (f a))  | Failed Failed22,23
+data UnificationError UnificationError25,26
+data UnificationError f a = OccursCheck OccursCheck25,26
+newtype Var Var28,29
+  Var Var29,30
+  Var { runVar runVar29,30
+class Traversable f => HasVar HasVar36,37
+  default takeVar :: (Generic1 f, GHasVar (Rep1 f)) => f f41,42
+  takeVar takeVar39,40
   takeVar takeVar42,43
-  takeVar takeVar45,46
-class GHasVar GHasVar47,48
-class GHasVar GHasVar47,48
-  gTakeVar gTakeVar48,49
-instance instance50,51
-activateVars activateVars75,76
-activateVars activateVars76,77
+class GHasVar GHasVar44,45
+class GHasVar GHasVar44,45
+  gTakeVar gTakeVar45,46
+instance instance47,48
+abstractOrd abstractOrd79,80
 abstractOrd abstractOrd82,83
-abstractOrd abstractOrd85,86
+retrieve retrieve91,92
 retrieve retrieve94,95
-retrieve retrieve98,99
-class Functor f => Unifiable Unifiable107,108
-                => f f111,112
+class Functor f => Unifiable Unifiable103,104
+                => f f107,108
+  unify unify104,105
   unify unify108,109
-  unify unify112,113
-unifyOrd unifyOrd114,115
-unifyOrd unifyOrd116,117
-class (Functor f, Functor c) => GUnify GUnify124,125
-class (Functor f, Functor c) => GUnify GUnify124,125
-  gunify gunify125,126
-occurs occurs160,161
-occurs occurs161,162
-readVar readVar163,164
-readVar readVar164,165
-assign assign166,167
-assign assign167,168
-equate equate169,170
-equate equate170,171
-equiv equiv172,173
-equiv equiv173,174
-unify' unify'175,176
-unify' unify'179,180
+unifyOrd unifyOrd110,111
+unifyOrd unifyOrd112,113
+class (Functor f, Functor c) => GUnify GUnify119,120
+class (Functor f, Functor c) => GUnify GUnify119,120
+  gunify gunify120,121
+occurs occurs156,157
+occurs occurs157,158
+readVar readVar159,160
+readVar readVar160,161
+assign assign162,163
+assign assign163,164
+equate equate165,166
+equate equate166,167
+equiv equiv168,169
+equiv equiv169,170
+tryTakeVar tryTakeVar171,172
+tryTakeVar tryTakeVar172,173
+pattern pattern175,176
+unify' unify'182,183
+unify' unify'186,187
 
 ./test/Spec.hs,30
 main main0,1

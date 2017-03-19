@@ -25,7 +25,6 @@ library
                      , mtl
                      , union-find
                      , transformers
-                     , free
   ghc-options:         -Wall
   default-language:    Haskell2010
   default-extensions:  DeriveGeneric
