@@ -16,8 +16,8 @@ instance Applicative Expr where
   pure  = return
 
 instance Monad Expr where
-  return = Var
-  Var x      >>= f = f x
+  return         = Var
+  Var x    >>= f = f x
   Num i    >>= _ = Num i
   (l :+ r) >>= f = (l >>= f) :+ (r >>= f)
   Neg e    >>= f = Neg (e >>= f)

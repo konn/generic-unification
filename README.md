@@ -20,7 +20,7 @@ data Expr v = Var v | Lit Int | Expr v :+ Expr v
 Here, type parameter *`v`* in `Expr v` corresponds to the *name* of each variable.
 We can use *Functor*, *Foldable* and *Traversable* instances
 for `Expr` to manipulate variables in `Expr`.
-For example, we can collect all occurence of variables in `t` by `Data.Foldable.toList t`,
+For example, we can collect all occurence of variables in `t` by `toList t`,
 uniform variable renaming by `mapM rename t`, etc.
 Fortunately, we can derive these instances for free thanks to GHCs `Derive*` language extensions.
 
