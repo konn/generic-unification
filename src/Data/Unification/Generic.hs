@@ -344,18 +344,5 @@ from derivation list and implement the custom instance for it.
 One can implement @'Unifiable'@ instance by hand for the sake of efficiency, of course.
 -}
 
-data Expr v = Vd v | App String [Expr v] | Lit Int
-            deriving (Read, Show, Eq, Ord, Functor,Generic1,
-                      Traversable, Foldable, HasVar, Unifiable)
 deriving instance HasVar []
 deriving instance Unifiable []
-
-instance Applicative Expr where
-  pure  = return
-  (<*>) = ap
-
-instance Monad Expr where
-  return = Vd
-  Vd x >>= f = f x
-  Lit n >>= _ = Lit n
-  App s fs >>= f = App s $ map (>>= f) fs
