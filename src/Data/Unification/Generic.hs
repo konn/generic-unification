@@ -8,16 +8,20 @@ module Data.Unification.Generic
          -- * Basic Classes
          HasVar(..), Unifiable(..)
        ) where
-import           Control.Monad       (join)
+import           Control.Monad       (forM, join, ap)
 import           Control.Monad.ST    (ST, runST)
-import           Control.Monad.State (StateT, gets, lift, modify, runStateT)
+import           Control.Monad.State (StateT, gets, lift, modify, runState,
+                                      runStateT)
+import qualified Data.IntMap         as IM
 import           Data.Map.Strict     (Map)
 import qualified Data.Map.Strict     as M
+import           Data.Maybe          (maybeToList)
 import           Data.UnionFind.ST   (Point, descriptor, equivalent, fresh)
 import           Data.UnionFind.ST   (setDescriptor, union)
-import           GHC.Generics        ((:*:) (..), (:+:) (..), Generic1 (..))
-import           GHC.Generics        (K1 (..), M1 (..), Par1 (..), Rec1 (..))
-import           GHC.Generics        (Rep1 (..), U1 (..), V1, from1, to1)
+import           GHC.Generics        ((:*:) (..), (:+:) (..), (:.:) (..))
+import           GHC.Generics        (Generic1 (..), K1 (..), M1 (..))
+import           GHC.Generics        (Par1 (..), Rec1 (..), Rep1 (..), U1 (..))
+import           GHC.Generics        (V1, from1, to1)
 
 data UnificationStatus f a =
   Success (f a) (Map a (f a))  | Failed (UnificationError f a)
@@ -91,29 +95,30 @@ abstractOrd = mapM $ \v -> do
 
 retrieve :: forall f s a. (HasVar f, Monad f)
          => Var f s a
-         -> ST s (f a)
+         -> ST s (Either a (f a))
 retrieve = loop
   where
+    loop :: Var f s a -> ST s (Either a (f a))
     loop (Var pt) = descriptor pt >>= \case
-      Left v  -> return $ V v
-      Right t -> join <$> mapM loop t
+      Left v  -> return $ Left v
+      Right t -> Right . join <$> mapM (fmap (either return id) . loop) t
 
 -- | Unifiable functors.
 --
 --   A 'Monad' with assignment as its bind @('>>=')@ can be automatically unified.
 class Functor f => Unifiable f where
-  unify :: Ord a => f a -> f a -> Maybe (f a, Map a (f a))
+  unify :: Ord a => f a -> f a -> Maybe (f a, Map a (Either a (f a)))
 
   default unify :: (Generic1 f, HasVar f, Monad f, GUnify f (Rep1 f), Ord a)
-                => f a -> f a -> Maybe (f a, Map a (f a))
+                => f a -> f a -> Maybe (f a, Map a (Either a (f a)))
   unify = unifyOrd
 
 unifyOrd :: (HasVar f, Monad f, Ord a, Generic1 f, GUnify f (Rep1 f))
-         => f a -> f a -> Maybe (f a, Map a (f a))
+         => f a -> f a -> Maybe (f a, Map a (Either a (f a)))
 unifyOrd l r = runST $ do
   ((l',r'), dic) <- runStateT ((,) <$> abstractOrd l <*> abstractOrd r) M.empty
   mans <- unify' l' r'
-  result <- mapM (fmap (join) . mapM retrieve) mans
+  result <- mapM (fmap join . mapM (fmap (either return id) . retrieve)) mans
   asig   <- mapM retrieve dic
   return ((, asig) <$> result)
 
@@ -129,6 +134,27 @@ instance Functor f => GUnify f U1 where
 
 instance Functor f => GUnify f V1 where
   gunify v = case v of {}
+
+instance (HasVar c, Unifiable c, GUnify f d) => GUnify f (c :.: d) where
+  gunify (Comp1 cdx) (Comp1 cdy) =
+    let remap x = forM x $ \v -> do
+          j <- gets snd
+          modify (\(d, i) -> (IM.insert i v d, i+1))
+          return j
+        ((ci, cj), (dic, _)) = flip runState (IM.empty, 0) $ (,) <$> remap cdx <*> remap cdy
+    in case unify ci cj of
+      Nothing -> return Nothing
+      Just (t, un'ed) -> do
+        let us = flexes dic un'ed
+        mas <- sequence_ <$> mapM (uncurry gunify) us
+        return $ fmap (const $ Comp1 $ fmap (dic IM.!) t) mas
+    where
+      flexes dic im = [ (t, s)
+                      | (l, Left r) <- M.toList im
+                      , t <- maybeToList $ IM.lookup l dic
+                      , s <- maybeToList $ IM.lookup r dic
+                      ]
+
 
 instance (Functor f, Eq c) => GUnify f (K1 i c) where
   gunify (K1 l) (K1 r) =
@@ -151,17 +177,21 @@ instance (GUnify f c, GUnify f d) => GUnify f (c :+: d) where
   gunify _ _ = return Nothing
 
 instance (Generic1 f, HasVar f, Monad f, GUnify f (Rep1 f)) => GUnify f Par1 where
-  gunify (Par1 l) (Par1 r) =
-    maybe Nothing (const $ Just $ Par1 l) <$> unify' (V l) (V r)
+  gunify (Par1 l) (Par1 r) = do
+    l' <- readVar l
+    r' <- readVar r
+    a <- case (l', r') of
+      (Right t, Right s) -> unify' t s
+      (Right t, Left {}) -> assign r t
+      (Left {}, Right t) -> assign l t
+      (Left {}, Left {}) -> unifyVars l r
+    return $ maybe Nothing (const $ Just $ Par1 l) a
 
 occurs :: Traversable f => Var f s a -> f (Var f s a) -> ST s Bool
 occurs v t = or <$> mapM (equiv v) t
 
 readVar :: Var f s a -> ST s (Either a (f (Var f s a)))
 readVar = descriptor . runVar
-
-assign :: Var f s t -> f (Var f s t) -> ST s (Maybe (f (Var f s t)))
-assign (Var v) t = setDescriptor v (Right t) >> return (Just t)
 
 equate :: Var t s a -> Var t s a -> ST s ()
 equate (Var v) (Var u) = union v u
@@ -172,13 +202,39 @@ equiv (Var v) (Var u) = equivalent v u
 tryTakeVar :: HasVar f => f v -> Either (f v) v
 tryTakeVar v = maybe (Left v) Right $ takeVar v
 
-pattern V :: (Applicative f, HasVar f) => Applicative f => v -> f v
-pattern V v <- (tryTakeVar -> Right v) where
-  V v = pure v
+pattern V :: (HasVar f) => v -> f v
+pattern V v <- (tryTakeVar -> Right v)
 
 pattern E :: HasVar f => f v -> f v
 pattern E t <- (tryTakeVar -> Left t) where
   E t = t
+
+assign :: (GUnify f (Rep1 f), Monad f, HasVar f, Generic1 f)
+         => Var f s a -> f (Var f s a) -> ST s (Maybe (f (Var f s a)))
+assign v t = do
+  occ <- occurs v t
+  readVar v >>= \case
+    Left {} | not occ   -> sub v t
+            | otherwise -> return Nothing
+    Right u -> maybe (return Nothing) (sub v) =<< unify' t u
+  where
+    sub (Var u) s = setDescriptor u (Right s) >> return (Just s)
+
+unifyVars :: (Applicative f,  GUnify f (Rep1 f), Monad f, Generic1 f, HasVar f)
+          => Var f s a -> Var f s a -> ST s (Maybe (f (Var f s a)))
+unifyVars u v = do
+  eq <- equiv u v
+  if eq
+    then return (Just (return u))
+    else do
+      u' <- readVar u
+      v' <- readVar v
+      match u' v'
+  where
+    match Left{} Left{}     = equate u v >> return (Just $ return v)
+    match Left{} (Right t)  = assign u t
+    match (Right s) Left{}  = assign v s
+    match (Right t) (Right s) = mapM (return <* pure (equate u v)) =<< unify' t s
 
 unify' :: forall f a s. (Generic1 f, HasVar f, Monad f, GUnify f (Rep1 f))
        => f (Var f s a)
@@ -188,26 +244,9 @@ unify' (E t) (E s) = do
   let tRep = from1 t
       sRep = from1 s
   fmap to1 <$> gunify tRep sRep
-unify' (E t) (V v) = do
-  occ <- occurs v t
-  readVar v >>= \case
-    Left {} | not occ   -> assign v t
-            | otherwise -> return Nothing
-    Right u -> maybe (return Nothing) (assign v) =<< unify' t u
-unify' (V v) (E s)  = unify' s (V v)
-unify' (V u) (V v) = do
-  eq <- equiv u v
-  if eq
-    then return (Just (V u))
-    else do
-      u' <- readVar u
-      v' <- readVar v
-      match u' v'
-  where
-    match Left{} Left{}     = equate u v >> return (Just $ V v)
-    match Left{} (Right t)  = unify' (V u) t
-    match (Right s) Left{}  = unify' (V v) s
-    match (Right t) (Right s) = mapM (return <* pure (equate u v)) =<< unify' t s
+unify' (E t) (V v) = assign v t
+unify' (V v) (E s) = assign v s
+unify' (V u) (V v) = unifyVars u v
 unify' _ _ = error "Cannot happen!" -- GHC cannot infer this empty case
 
 {-$doc
@@ -304,3 +343,19 @@ from derivation list and implement the custom instance for it.
 
 One can implement @'Unifiable'@ instance by hand for the sake of efficiency, of course.
 -}
+
+data Expr v = Vd v | App String [Expr v] | Lit Int
+            deriving (Read, Show, Eq, Ord, Functor,Generic1,
+                      Traversable, Foldable, HasVar, Unifiable)
+deriving instance HasVar []
+deriving instance Unifiable []
+
+instance Applicative Expr where
+  pure  = return
+  (<*>) = ap
+
+instance Monad Expr where
+  return = Vd
+  Vd x >>= f = f x
+  Lit n >>= _ = Lit n
+  App s fs >>= f = App s $ map (>>= f) fs
