@@ -271,12 +271,28 @@ deriving instance HasVar []
 instance Unifiable [] where
   type Entry [] = Void1
 
-  unify []       []       = Just ([], M.empty)
-  unify []       (_ : _)  = Nothing
-  unify (_ : _)  []       = Nothing
-  unify (x : xs) (y : ys) = do
-    (rs, dic) <- unify xs ys
-    return (x : rs, M.insert y (Left x) dic)
+  unify l r = runST $ do
+    ((l', r'), dic) <- runStateT ((,) <$> mapM abstr l <*> mapM abstr r) M.empty
+    ans <- loop l' r'
+    if ans
+      then Just <$> ((,) <$> mapM descriptor l' <*> mapM (fmap Left . descriptor) dic)
+      else return Nothing
+    where
+      loop [] [] = return True
+      loop (_ : _) [] = return False
+      loop [] (_ : _) = return False
+      loop (x : xs) (y : ys) = do
+        union x y
+        loop xs ys
+                        
+      abstr v = do
+        mk <- gets $ M.lookup v
+        case mk of
+          Just pt -> return pt
+          Nothing -> do
+            pt <- lift $ fresh v
+            modify $ M.insert v pt
+            return pt
 
 unifySimple :: (Unifiable f, Entry f ~ Void1, Ord a)
           => f a -> f a -> Maybe (f a, Map a a)
