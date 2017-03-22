@@ -1,14 +1,17 @@
 {-# LANGUAGE DeriveTraversable, EmptyCase, FlexibleInstances, InstanceSigs #-}
 {-# LANGUAGE LambdaCase, PatternSynonyms, PolyKinds, RankNTypes            #-}
 {-# LANGUAGE ScopedTypeVariables, StandaloneDeriving, TupleSections        #-}
-{-# LANGUAGE TypeApplications, UndecidableInstances, ViewPatterns          #-}
+{-# LANGUAGE TypeApplications, UndecidableInstances, ViewPatterns, EmptyDataDecls          #-}
 module Data.Unification.Generic
        ( -- $doc
 
          -- * Basic Classes
-         HasVar(..), Unifiable(..)
+         HasVar(..), Unifiable(..),
+
+         -- * Helpers for 'Vacuous'
+         Void1(), absurd1, unifySimple
        ) where
-import           Control.Monad       (forM, join, ap)
+import           Control.Monad       (forM, join)
 import           Control.Monad.ST    (ST, runST)
 import           Control.Monad.State (StateT, gets, lift, modify, runState,
                                       runStateT)
@@ -19,7 +22,7 @@ import           Data.Maybe          (maybeToList)
 import           Data.UnionFind.ST   (Point, descriptor, equivalent, fresh)
 import           Data.UnionFind.ST   (setDescriptor, union)
 import           GHC.Generics        ((:*:) (..), (:+:) (..), (:.:) (..))
-import           GHC.Generics        (Generic1 (..), K1 (..), M1 (..))
+import           GHC.Generics        (Generic1 (..), K1 (..), M1 (..), Generic)
 import           GHC.Generics        (Par1 (..), Rec1 (..), Rep1 (..), U1 (..))
 import           GHC.Generics        (V1, from1, to1)
 
@@ -107,9 +110,11 @@ retrieve = loop
 --
 --   A 'Monad' with assignment as its bind @('>>=')@ can be automatically unified.
 class Functor f => Unifiable f where
-  unify :: Ord a => f a -> f a -> Maybe (f a, Map a (Either a (f a)))
+  type Entry f :: * -> *
+  unify :: Ord a => f a -> f a -> Maybe (f a, Map a (Either a (Entry f a)))
 
-  default unify :: (Generic1 f, HasVar f, Monad f, GUnify f (Rep1 f), Ord a)
+  type Entry f = f
+  default unify :: (Generic1 f, HasVar f, Monad f, GUnify f (Rep1 f), Ord a, Entry f ~ f)
                 => f a -> f a -> Maybe (f a, Map a (Either a (f a)))
   unify = unifyOrd
 
@@ -249,6 +254,27 @@ unify' (V v) (E s) = assign v s
 unify' (V u) (V v) = unifyVars u v
 unify' _ _ = error "Cannot happen!" -- GHC cannot infer this empty case
 
+data Void1 a deriving (Generic1, Generic, Functor, Foldable, Traversable)
+
+absurd1 :: Void1 a -> b
+absurd1 a = case a of {}
+
+instance Unifiable [] where
+  type Entry [] = Void1
+
+  unify []       []       = Just ([], M.empty)
+  unify []       (_ : _)  = Nothing
+  unify (_ : _)  []       = Nothing
+  unify (x : xs) (y : ys) = do
+    (rs, dic) <- unify xs ys
+    return (x : rs, M.insert y (Left x) dic)
+
+unifySimple :: (Unifiable f, Entry f ~ Void1, Ord a)
+          => f a -> f a -> Maybe (f a, Map a a)
+unifySimple l r = do
+  (t, dic) <- unify l r
+  return (t, fmap (either id absurd1) dic)
+
 {-$doc
 
 = Introduction: Substitution and Monad
@@ -343,6 +369,3 @@ from derivation list and implement the custom instance for it.
 
 One can implement @'Unifiable'@ instance by hand for the sake of efficiency, of course.
 -}
-
-deriving instance HasVar []
-deriving instance Unifiable []
