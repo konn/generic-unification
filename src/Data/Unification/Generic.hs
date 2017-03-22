@@ -15,6 +15,7 @@ import           Control.Monad       (forM, join)
 import           Control.Monad.ST    (ST, runST)
 import           Control.Monad.State (StateT, gets, lift, modify, runState,
                                       runStateT)
+import Data.Functor.Classes          (Show1(..))
 import qualified Data.IntMap         as IM
 import           Data.Map.Strict     (Map)
 import qualified Data.Map.Strict     as M
@@ -255,6 +256,12 @@ unify' (V u) (V v) = unifyVars u v
 unify' _ _ = error "Cannot happen!" -- GHC cannot infer this empty case
 
 data Void1 a deriving (Generic1, Generic, Functor, Foldable, Traversable)
+
+instance Show (Void1 a) where
+  showsPrec _ a = case a of {}
+
+instance Show1 Void1 where
+  liftShowsPrec _ a = case a of {}
 
 absurd1 :: Void1 a -> b
 absurd1 a = case a of {}
