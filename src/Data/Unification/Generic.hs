@@ -259,6 +259,8 @@ data Void1 a deriving (Generic1, Generic, Functor, Foldable, Traversable)
 absurd1 :: Void1 a -> b
 absurd1 a = case a of {}
 
+deriving instance HasVar []
+
 instance Unifiable [] where
   type Entry [] = Void1
 
