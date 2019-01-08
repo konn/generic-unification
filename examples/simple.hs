@@ -28,4 +28,3 @@ main = do
   print $ unify (Var "x" :+ Num 2) (Num 2 :+ Var "x")
   print $ unify (Var "x" :+ Num 2) (Num 3 :+ Var "x")
   print $ unify (Var "x" :+ Num 2) (Var "y" :+ Var "x")
-

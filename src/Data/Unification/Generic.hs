@@ -1,7 +1,8 @@
-{-# LANGUAGE DeriveTraversable, EmptyCase, FlexibleInstances, InstanceSigs #-}
-{-# LANGUAGE LambdaCase, PatternSynonyms, PolyKinds, RankNTypes            #-}
-{-# LANGUAGE ScopedTypeVariables, StandaloneDeriving, TupleSections        #-}
-{-# LANGUAGE TypeApplications, UndecidableInstances, ViewPatterns, EmptyDataDecls          #-}
+{-# LANGUAGE DeriveTraversable, EmptyCase, EmptyDataDecls                 #-}
+{-# LANGUAGE FlexibleInstances, InstanceSigs, LambdaCase, PatternSynonyms #-}
+{-# LANGUAGE PolyKinds, RankNTypes, ScopedTypeVariables                   #-}
+{-# LANGUAGE StandaloneDeriving, TupleSections, TypeApplications          #-}
+{-# LANGUAGE UndecidableInstances, ViewPatterns                           #-}
 module Data.Unification.Generic
        ( -- $doc
 
@@ -11,25 +12,22 @@ module Data.Unification.Generic
          -- * Helpers for 'Vacuous'
          Void1(), absurd1, unifySimple
        ) where
-import           Control.Monad       (forM, join)
-import           Control.Monad.ST    (ST, runST)
-import           Control.Monad.State (StateT, gets, lift, modify, runState,
-                                      runStateT)
-import Data.Functor.Classes          (Show1(..))
-import qualified Data.IntMap         as IM
-import           Data.Map.Strict     (Map)
-import qualified Data.Map.Strict     as M
-import           Data.Maybe          (maybeToList)
-import           Data.UnionFind.ST   (Point, descriptor, equivalent, fresh)
-import           Data.UnionFind.ST   (setDescriptor, union)
-import           GHC.Generics        ((:*:) (..), (:+:) (..), (:.:) (..))
-import           GHC.Generics        (Generic1 (..), K1 (..), M1 (..), Generic)
-import           GHC.Generics        (Par1 (..), Rec1 (..), Rep1 (..), U1 (..))
-import           GHC.Generics        (V1, from1, to1)
+import           Data.Unification.Variable (Variable (Table))
+import qualified Data.Unification.Variable as Var
 
-data UnificationStatus f a =
-  Success (f a) (Map a (f a))  | Failed (UnificationError f a)
-  deriving (Read, Show, Eq, Ord)
+import           Control.Monad        (forM, join)
+import           Control.Monad.ST     (ST, runST)
+import           Control.Monad.State  (StateT, gets, lift, modify, runState,
+                                       runStateT)
+import           Data.Functor.Classes (Show1 (..))
+import qualified Data.IntMap          as IM
+import           Data.Maybe           (maybeToList)
+import           Data.UnionFind.ST    (Point, descriptor, equivalent, fresh)
+import           Data.UnionFind.ST    (setDescriptor, union)
+import           GHC.Generics         ((:*:) (..), (:+:) (..), (:.:) (..))
+import           GHC.Generics         (Generic, Generic1 (..), K1 (..), M1 (..))
+import           GHC.Generics         (Par1 (..), Rec1 (..), Rep1 (..), U1 (..))
+import           GHC.Generics         (V1, from1, to1)
 
 data UnificationError f a = OccursCheck (f a) (f a)
                           deriving (Read, Show, Eq, Ord)
@@ -85,15 +83,15 @@ instance GHasVar (K1 i c) where
 --     Nothing -> Free $ fmap (activateVars) x
 --     Just a  -> activateVars a
 
-abstractOrd :: (HasVar f, Ord a)
+abstractOrd :: (HasVar f, Variable a)
             => f a
-            -> StateT (Map a (Var f s a)) (ST s) (f (Var f s a))
+            -> StateT (Table a (Var f s a)) (ST s) (f (Var f s a))
 abstractOrd = mapM $ \v -> do
-  mvar <- gets (M.lookup v)
+  mvar <- gets (Var.lookup v)
   case mvar of
     Nothing -> do
       ref <- lift $ Var <$> fresh (Left v)
-      modify $ M.insert v ref
+      modify $ Var.insert v ref
       return ref
     Just c  -> return c
 
@@ -111,18 +109,15 @@ retrieve = loop
 --
 --   A 'Monad' with assignment as its bind @('>>=')@ can be automatically unified.
 class Functor f => Unifiable f where
-  type Entry f :: * -> *
-  unify :: Ord a => f a -> f a -> Maybe (f a, Map a (Either a (Entry f a)))
-
-  type Entry f = f
-  default unify :: (Generic1 f, HasVar f, Monad f, GUnify f (Rep1 f), Ord a, Entry f ~ f)
-                => f a -> f a -> Maybe (f a, Map a (Either a (f a)))
+  unify :: Variable a => f a -> f a -> Maybe (f a, Table a (Either a (f a)))
+  default unify :: (Generic1 f, HasVar f, Monad f, GUnify f (Rep1 f), Variable a)
+                => f a -> f a -> Maybe (f a, Table a (Either a (f a)))
   unify = unifyOrd
 
-unifyOrd :: (HasVar f, Monad f, Ord a, Generic1 f, GUnify f (Rep1 f))
-         => f a -> f a -> Maybe (f a, Map a (Either a (f a)))
+unifyOrd :: forall f a. (HasVar f, Monad f, Variable a, Generic1 f, GUnify f (Rep1 f))
+         => f a -> f a -> Maybe (f a, Table a (Either a (f a)))
 unifyOrd l r = runST $ do
-  ((l',r'), dic) <- runStateT ((,) <$> abstractOrd l <*> abstractOrd r) M.empty
+  ((l',r'), dic) <- runStateT ((,) <$> abstractOrd l <*> abstractOrd r) (Var.emptyTable @a)
   mans <- unify' l' r'
   result <- mapM (fmap join . mapM (fmap (either return id) . retrieve)) mans
   asig   <- mapM retrieve dic
@@ -156,7 +151,7 @@ instance (HasVar c, Unifiable c, GUnify f d) => GUnify f (c :.: d) where
         return $ fmap (const $ Comp1 $ fmap (dic IM.!) t) mas
     where
       flexes dic im = [ (t, s)
-                      | (l, Left r) <- M.toList im
+                      | (l, Left r) <- Var.toList im
                       , t <- maybeToList $ IM.lookup l dic
                       , s <- maybeToList $ IM.lookup r dic
                       ]
@@ -261,7 +256,7 @@ instance Show (Void1 a) where
   showsPrec _ a = case a of {}
 
 instance Show1 Void1 where
-  liftShowsPrec _ a = case a of {}
+  liftShowsPrec _ _ _ v = case v of {}
 
 absurd1 :: Void1 a -> b
 absurd1 a = case a of {}
@@ -269,10 +264,8 @@ absurd1 a = case a of {}
 deriving instance HasVar []
 
 instance Unifiable [] where
-  type Entry [] = Void1
-
-  unify l r = runST $ do
-    ((l', r'), dic) <- runStateT ((,) <$> mapM abstr l <*> mapM abstr r) M.empty
+  unify (l :: [v]) r = runST $ do
+    ((l', r'), dic) <- runStateT ((,) <$> mapM abstr l <*> mapM abstr r) (Var.emptyTable @v)
     ans <- loop l' r'
     if ans
       then Just <$> ((,) <$> mapM descriptor l' <*> mapM (fmap Left . descriptor) dic)
@@ -284,18 +277,18 @@ instance Unifiable [] where
       loop (x : xs) (y : ys) = do
         union x y
         loop xs ys
-                        
+
       abstr v = do
-        mk <- gets $ M.lookup v
+        mk <- gets $ Var.lookup v
         case mk of
           Just pt -> return pt
           Nothing -> do
             pt <- lift $ fresh v
-            modify $ M.insert v pt
+            modify $ Var.insert v pt
             return pt
 
-unifySimple :: (Unifiable f, Entry f ~ Void1, Ord a)
-          => f a -> f a -> Maybe (f a, Map a a)
+unifySimple :: (Unifiable f, f ~ Void1, Variable a)
+          => f a -> f a -> Maybe (f a, Table a a)
 unifySimple l r = do
   (t, dic) <- unify l r
   return (t, fmap (either id absurd1) dic)

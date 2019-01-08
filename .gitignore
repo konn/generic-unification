@@ -81,3 +81,4 @@ tramp
 # cask packages
 .cask/
 
+generic-unification.cabal

@@ -1,0 +1,53 @@
+name: generic-unification
+version: '0.1.0.0'
+synopsis: Unification for free!
+description: ! 'This package provides automatic deriving mechanism for unification
+  algorithm.
+
+
+  See <Data-Unification-Generic.html Module documentation> for more information.'
+category: Web
+author: Hiromi ISHII
+maintainer: konn.jinro _at_ gmail.com
+copyright: 2015 (c) Hiromi ISHII
+license: BSD3
+github: konn/generic-unification
+extra-source-files:
+- README.md
+library:
+  source-dirs: src
+  default-extensions:
+  - DeriveGeneric
+  - GADTs
+  - TypeFamilies
+  - MultiParamTypeClasses
+  - DeriveAnyClass
+  - DeriveFunctor
+  - GeneralizedNewtypeDeriving
+  - TypeOperators
+  - DefaultSignatures
+  - FlexibleContexts
+  ghc-options: -Wall
+  exposed-modules:
+  - Data.Unification.Generic
+  dependencies:
+  - base >=4.7 && <5
+  - containers
+  - deriving-compat
+  - hashable
+  - mtl
+  - transformers
+  - union-find
+  - unordered-containers
+
+tests:
+  generic-unification-test:
+    main: Spec.hs
+    source-dirs: test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - base
+    - generic-unification
