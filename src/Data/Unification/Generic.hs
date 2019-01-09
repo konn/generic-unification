@@ -221,7 +221,7 @@ assign v t = do
   where
     sub (Var u) s = setDescriptor u (Right s) >> return (Just s)
 
-unifyVars :: (Applicative f,  GUnify f (Rep1 f), Monad f, Generic1 f, HasVar f)
+unifyVars :: (Applicative f, GUnify f (Rep1 f), Monad f, Generic1 f, HasVar f)
           => Var f s a -> Var f s a -> ST s (Maybe (f (Var f s a)))
 unifyVars u v = do
   eq <- equiv u v
