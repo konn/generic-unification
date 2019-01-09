@@ -10,14 +10,16 @@ module Data.Unification.Variable
 import           Control.Arrow        (first)
 import           Data.Coerce          (coerce)
 import           Data.Deriving.Via
+import           Data.Either          (partitionEithers)
 import           Data.Functor.Classes
 import           Data.Functor.Compose
+import           Data.Functor.Product (Product (..))
 import           Data.Hashable        (Hashable)
 import qualified Data.HashMap.Strict  as HM
 import qualified Data.IntMap.Strict   as IM
 import           Data.Kind
 import qualified Data.Map.Strict      as M
-import           Data.Maybe           (maybeToList)
+import           Data.Maybe           (fromMaybe, maybeToList)
 import           Data.Proxy           (Proxy (..))
 import           GHC.Generics         (Generic)
 import           Prelude              hiding (lookup)
@@ -221,3 +223,28 @@ deriveVia [t| Variable String `Via` HashVar String |]
 substitute :: (Monad m, Variable a) => Table a (m a) -> m a -> m a
 substitute dic e = e >>= \v -> fromMaybe (return v) (lookup v dic)
 
+instance (Variable a, Variable b) => Variable (Either a b) where
+  type Table (Either a b) = Product (Table a) (Table b)
+  emptyTable' _ = Pair (emptyTable @a) (emptyTable @b)
+  {-# INLINE emptyTable' #-}
+  singleton =
+    either ((flip Pair (emptyTable @b) .) . singleton)
+           ((Pair (emptyTable @a) .) . singleton)
+  {-# INLINE singleton #-}
+  insert (Left k) v (Pair l r) =
+    Pair (insert k v l) r
+  insert (Right k) v (Pair l r) =
+    Pair l (insert k v r)
+  {-# INLINE insert #-}
+  lookup (Left k)  (Pair l _) = lookup k l
+  lookup (Right k) (Pair _ r) = lookup k r
+  {-# INLINE lookup #-}
+  fromList es =
+    let (ls, rs) = partitionEithers $
+                  map (\case { (Left k, v) -> Left (k, v)
+                             ; (Right k, v) -> Right (k,v)
+                             }) es
+    in Pair (fromList ls) (fromList rs)
+  {-# INLINE fromList #-}
+  toList (Pair ls rs) = map (first Left) (toList ls) ++ map (first Right) (toList rs)
+  {-# INLINE toList #-}
