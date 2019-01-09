@@ -1,9 +1,13 @@
 {-# LANGUAGE AllowAmbiguousTypes, DataKinds, DeriveFoldable, DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric, DeriveTraversable, DerivingStrategies          #-}
 {-# LANGUAGE FlexibleInstances, GeneralizedNewtypeDeriving, InstanceSigs   #-}
-{-# LANGUAGE KindSignatures, ScopedTypeVariables, TemplateHaskell          #-}
-{-# LANGUAGE TypeApplications, TypeFamilies, UndecidableInstances          #-}
-module Data.Unification.Variable (Variable(..), emptyTable, OrdVar(..)) where
+{-# LANGUAGE KindSignatures, LambdaCase, ScopedTypeVariables               #-}
+{-# LANGUAGE TemplateHaskell, TypeApplications, TypeFamilies               #-}
+{-# LANGUAGE UndecidableInstances                                          #-}
+module Data.Unification.Variable
+  ( Variable(..), emptyTable, OrdVar(..), substitute
+  ) where
+import           Control.Arrow        (first)
 import           Data.Coerce          (coerce)
 import           Data.Deriving.Via
 import           Data.Functor.Classes
@@ -213,3 +217,7 @@ instance (Variable a, Variable b, Variable c, Variable d, Variable e)
   {-# INLINE toList #-}
 
 deriveVia [t| Variable String `Via` HashVar String |]
+
+substitute :: (Monad m, Variable a) => Table a (m a) -> m a -> m a
+substitute dic e = e >>= \v -> fromMaybe (return v) (lookup v dic)
+
